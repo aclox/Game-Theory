@@ -565,7 +565,7 @@ const DESCRIPTIONS = {
 };
 
 class SimVehicle {
-    constructor(id, direction, isAv = true, urgency = 5.0, isEmergency = false, startOffset = 290) {
+    constructor(id, direction, isAv = true, urgency = 5.0, isEmergency = false, startOffset = 230) {
         this.id = id;
         this.direction = direction; // 'north', 'south', 'east', 'west'
         this.isAv = isAv;
@@ -717,18 +717,24 @@ function spawnWave() {
     const numVehicles = Math.min(4, Math.floor(Math.random() * 3) + 2);
     const chosenDirs = [...allDirs].sort(() => 0.5 - Math.random()).slice(0, numVehicles);
 
-    // Track active vehicles per direction to compute trailing start distance
+    // Track active vehicles per direction that are still approaching the intersection
     const activeVehicles = simVehicles.filter(v => v.state !== "passed" && v.state !== "collided");
 
     chosenDirs.forEach((d, idx) => {
-        // Find existing vehicles in this lane
-        const inLane = activeVehicles.filter(v => v.direction === d);
-        let startOffset = 290;
+        // Find existing approaching vehicles in this lane
+        const inLane = activeVehicles.filter(v => v.direction === d && !v.isInside());
+        let startOffset = 230;
         if (inLane.length > 0) {
-            // Place behind the last vehicle in this lane by at least 65 pixels
+            // Place behind the last vehicle in this lane by 48 pixels
             const maxCenterDist = Math.max(...inLane.map(v => v.distToCenter()));
-            startOffset = Math.max(290, maxCenterDist + 65);
+            startOffset = Math.max(230, maxCenterDist + 48);
         }
+
+        // Keep vehicle within road approach boundary
+        startOffset = Math.min(320, startOffset);
+
+        // If the lane already has 5 waiting vehicles, skip adding to avoid overflowing off-canvas
+        if (inLane.length >= 5) return;
 
         const isEmg = idx === 0 && Math.random() < 0.22;
         const isAv = Math.random() < 0.75;
@@ -773,7 +779,7 @@ function enforceSameLaneCarFollowing(active) {
         if (byDir[v.direction]) byDir[v.direction].push(v);
     });
 
-    const SAFE_GAP = 52; // minimum safe gap buffer between vehicle centers
+    const SAFE_GAP = 48; // minimum safe gap buffer between vehicle centers
 
     // Apply car following in a sorted lane list (index 0 is front-most car)
     const applyFollowing = (lane, getGap) => {
@@ -783,19 +789,18 @@ function enforceSameLaneCarFollowing(active) {
             const gap = getGap(lead, trail);
 
             if (gap < SAFE_GAP) {
-                if (lead.action === "yield" || lead.speed < 0.4) {
+                if (lead.action === "yield" || lead.speed < 0.35) {
                     // Lead vehicle is stopped or yielding; trail vehicle stops behind it
                     trail.action = "yield";
+                    trail.speed = Math.max(0, trail.speed - 0.25);
                 } else {
                     // Lead vehicle is cruising forward; trail follows smoothly!
                     trail.action = "go";
-                    trail.speed = Math.min(trail.maxSpeed, Math.max(0.5, lead.speed * 0.95));
+                    trail.speed = Math.min(trail.maxSpeed, Math.max(0.6, lead.speed * 0.98));
                 }
             } else {
-                // Gap is open! Trailing car accelerates to fill up space up to the stop line
-                if (trail.distToCenter() > 90) {
-                    trail.action = "go";
-                }
+                // Gap is open! Trailing car always accelerates forward to fill the space
+                trail.action = "go";
             }
         }
     };
@@ -1162,9 +1167,13 @@ function simLoop() {
             }
         });
         checkSimConflicts();
-        // Remove exited or old vehicles (beyond canvas bounds)
+        // Remove exited vehicles only when they have completed crossing and fully left the canvas
         simVehicles = simVehicles.filter(v => {
-            return Math.hypot(v.x - v.centerX, v.y - v.centerY) < 410 || v.state === "collided";
+            if (v.state === "collided") return true;
+            if (v.state === "passed") {
+                return Math.hypot(v.x - v.centerX, v.y - v.centerY) < 450;
+            }
+            return true; // Approaching and crossing vehicles are NEVER removed
         });
     }
 
