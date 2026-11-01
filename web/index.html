@@ -9,6 +9,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- KaTeX for crisp LaTeX mathematical rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -82,6 +86,7 @@
                         </p>
                         <div class="button-row">
                             <button id="btn-spawn" class="btn btn-primary">🚗 Spawn Wave</button>
+                            <button id="btn-auto-flow" class="btn btn-secondary">⚡ Auto Flow: OFF</button>
                             <button id="btn-toggle-pause" class="btn btn-secondary">⏸ Pause</button>
                             <button id="btn-reset" class="btn btn-danger">🔄 Reset</button>
                         </div>
@@ -136,6 +141,7 @@
                             <option value="coordination">Right-Hand Convention (Pure Coordination)</option>
                             <option value="prisoners">Selfish Commuters (Prisoner's Dilemma)</option>
                             <option value="emergency">Emergency Priority Game</option>
+                            <option value="custom">Custom Payoff Matrix (User Defined)</option>
                         </select>
                     </div>
 
@@ -151,46 +157,52 @@
                             <tbody>
                                 <tr>
                                     <th>Action 0: Go</th>
-                                    <td class="matrix-cell">
+                                    <td class="matrix-cell" id="td-cell-00">
                                         <div class="payoff-input-pair">
                                             <input type="number" id="cell-00-a" value="-100" class="input-payoff player-a" title="Payoff A">
                                             <span class="sep">,</span>
                                             <input type="number" id="cell-00-b" value="-100" class="input-payoff player-b" title="Payoff B">
                                         </div>
-                                        <div class="cell-label">Collision</div>
+                                        <div class="cell-label" id="cell-00-label">Collision</div>
                                     </td>
-                                    <td class="matrix-cell">
+                                    <td class="matrix-cell" id="td-cell-01">
                                         <div class="payoff-input-pair">
                                             <input type="number" id="cell-01-a" value="10" class="input-payoff player-a" title="Payoff A">
                                             <span class="sep">,</span>
                                             <input type="number" id="cell-01-b" value="2" class="input-payoff player-b" title="Payoff B">
                                         </div>
-                                        <div class="cell-label">A Proceeds, B Yields</div>
+                                        <div class="cell-label" id="cell-01-label">A Proceeds, B Yields</div>
                                     </td>
                                 </tr>
                                 <tr>
                                     <th>Action 1: Yield</th>
-                                    <td class="matrix-cell">
+                                    <td class="matrix-cell" id="td-cell-10">
                                         <div class="payoff-input-pair">
                                             <input type="number" id="cell-10-a" value="2" class="input-payoff player-a" title="Payoff A">
                                             <span class="sep">,</span>
                                             <input type="number" id="cell-10-b" value="10" class="input-payoff player-b" title="Payoff B">
                                         </div>
-                                        <div class="cell-label">A Yields, B Proceeds</div>
+                                        <div class="cell-label" id="cell-10-label">A Yields, B Proceeds</div>
                                     </td>
-                                    <td class="matrix-cell">
+                                    <td class="matrix-cell" id="td-cell-11">
                                         <div class="payoff-input-pair">
                                             <input type="number" id="cell-11-a" value="0" class="input-payoff player-a" title="Payoff A">
                                             <span class="sep">,</span>
                                             <input type="number" id="cell-11-b" value="0" class="input-payoff player-b" title="Payoff B">
                                         </div>
-                                        <div class="cell-label">Deadlock</div>
+                                        <div class="cell-label" id="cell-11-label">Deadlock</div>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <button id="btn-recompute-nash" class="btn btn-primary">⚡ Compute Equilibria</button>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button id="btn-recompute-nash" class="btn btn-primary" style="flex: 1;">⚡ Compute Equilibria</button>
+                    </div>
+                    <div class="solver-status-bar">
+                        <span class="solver-status-pill" id="solver-status-text">● Ready (Calculated in Real-Time)</span>
+                        <span id="solver-calc-time" style="font-family: var(--font-mono); font-size: 0.75rem;">Instant</span>
+                    </div>
                 </div>
 
                 <!-- Solver Output Card -->
@@ -261,25 +273,49 @@
                         <li><strong>Deadlock ($u = 0$):</strong> Both yield, wasting intersection capacity.</li>
                     </ul>
                     <p class="math-block">
-                        \text{Mixed NE condition: } q \cdot u_A(\text{Go}, \text{Go}) + (1-q) \cdot u_A(\text{Go}, \text{Yield}) = q \cdot u_A(\text{Yield}, \text{Go}) + (1-q) \cdot u_A(\text{Yield}, \text{Yield})
+                        $$\text{Mixed NE Indifference: } \mathbb{E}[u_A(\text{Go})] = \mathbb{E}[u_A(\text{Yield})]$$
+                        $$q \cdot u_A(\text{Go}, \text{Go}) + (1-q) \cdot u_A(\text{Go}, \text{Yield}) = q \cdot u_A(\text{Yield}, \text{Go}) + (1-q) \cdot u_A(\text{Yield}, \text{Yield})$$
+                        $$-100q + 10(1-q) = 2q + 0 \implies 112q = 10 \implies q^* \approx 0.0893 \; (8.93\%)$$
                     </p>
                 </article>
 
                 <article class="card theory-card">
                     <h2>2. Stackelberg Leader-Follower (Extensive Form)</h2>
-                    <p>When arrival times differ, the earlier vehicle commits to an action $a_L \in \{\text{Go}, \text{Yield}\}$. The follower observes $a_L$ and plays its best response $a_F^*(a_L) = \arg\max_{a_F} u_F(a_L, a_F)$.</p>
-                    <p>Backward induction resolves the subgame-perfect equilibrium: Leader commits to <strong>Go</strong> knowing the rational follower will choose <strong>Yield</strong>. This eliminates the coordination failure of simultaneous games.</p>
+                    <p>When arrival times differ, the earlier vehicle commits to an action $a_L \in \{\text{Go}, \text{Yield}\}$. The follower observes $a_L$ and plays its best response:</p>
+                    <p class="math-block">
+                        $$a_F^*(a_L) = \arg\max_{a_F \in \{\text{Go}, \text{Yield}\}} u_F(a_L, a_F)$$
+                        $$\text{Subgame Perfect Nash Equilibrium (SPE): } (a_L^*, a_F^*(a_L^*)) = (\text{Go}, \text{Yield})$$
+                    </p>
+                    <p>Backward induction resolves the subgame-perfect equilibrium: Leader commits to <strong>Go</strong> knowing the rational follower will choose <strong>Yield</strong> ($u_F = 2$ vs $-100$). This eliminates the coordination failure of simultaneous games.</p>
                 </article>
 
                 <article class="card theory-card">
                     <h2>3. Bayesian Games with Driver Type Uncertainty</h2>
-                    <p>In mixed traffic, autonomous vehicles interact with human drivers whose risk profiles $\theta \in \{\theta_{\text{aggressive}}, \theta_{\text{cautious}}\}$ are private information. The AV maintains prior $P(\theta_{\text{agg}}) = p$. The Bayesian Nash Equilibrium yields a conservative yielding threshold for the AV to guarantee zero collision probability.</p>
+                    <p>In mixed traffic, autonomous vehicles interact with human drivers whose risk profiles $\theta \in \{\theta_{\text{aggressive}}, \theta_{\text{cautious}}\}$ are private information. The AV maintains prior $P(\theta_{\text{agg}}) = p$. The Bayesian Nash Equilibrium yields a conservative yielding threshold for the AV:</p>
+                    <p class="math-block">
+                        $$\mathbb{P}_{\text{human}}(\text{Go}) = p \cdot \mathbb{P}(\text{Go} \mid \theta_{\text{agg}}) + (1-p) \cdot \mathbb{P}(\text{Go} \mid \theta_{\text{cautious}})$$
+                        $$\mathbb{E}[u_{\text{AV}}(\text{Go})] = \mathbb{P}_{\text{human}}(\text{Go}) \cdot (-100) + (1 - \mathbb{P}_{\text{human}}(\text{Go})) \cdot 10$$
+                        $$\text{AV best responds with Yield whenever } \mathbb{E}[u_{\text{AV}}(\text{Yield})] > \mathbb{E}[u_{\text{AV}}(\text{Go})]$$
+                    </p>
                 </article>
 
                 <article class="card theory-card">
                     <h2>4. Vickrey Auction (Second-Price Sealed-Bid) Mechanism</h2>
                     <p>A decentralized intersection controller invites bids $b_i$ corresponding to urgency $v_i$. The vehicle with the highest bid $b_{(1)}$ wins the right-of-way and pays the second-highest bid $p = b_{(2)}$.</p>
+                    <p class="math-block">
+                        $$u_i(b_i, v_i) = \begin{cases} v_i - \max_{j \neq i} b_j & \text{if } b_i > \max_{j \neq i} b_j \\ 0 & \text{otherwise} \end{cases}$$
+                        $$\text{Dominant Strategy: } b_i^* = v_i \quad (\text{Truth-Telling is strictly incentive compatible})$$
+                    </p>
                     <p><strong>Dominant-Strategy Truth-Telling:</strong> Bidding $b_i = v_i$ strictly maximizes expected utility, guaranteeing $100\%$ allocative efficiency without coordination delays.</p>
+                </article>
+
+                <article class="card theory-card">
+                    <h2>5. Correlated Equilibrium (Public Signal Device)</h2>
+                    <p>A correlating device (traffic signal or V2X beacon) draws action recommendation $s \in S$ from joint distribution $P(s)$. Players have no incentive to deviate:</p>
+                    <p class="math-block">
+                        $$\sum_{s_{-i} \in S_{-i}} P(s_i, s_{-i}) \left[ u_i(s_i, s_{-i}) - u_i(s_i', s_{-i}) \right] \ge 0, \quad \forall s_i, s_i' \in S_i$$
+                        $$\text{Optimal Signal Distribution: } P(\text{Go}, \text{Yield}) = 0.50, \quad P(\text{Yield}, \text{Go}) = 0.50, \quad P(\text{Go}, \text{Go}) = 0$$
+                    </p>
                 </article>
             </div>
         </section>
@@ -291,6 +327,6 @@
         </footer>
     </div>
 
-    <script src="app.js"></script>
+    <script defer src="app.js"></script>
 </body>
 </html>

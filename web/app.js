@@ -1,17 +1,49 @@
 /**
  * Game-Theoretic Autonomous Vehicles Intersection System
  * Interactive Simulation, Nash Solver, and Benchmark Engine
+ * Authors: Mohit Agarwal, Ineesh Khindria, Akshit Goel
  */
 
 // ============================================================================
-// 1. TAB NAVIGATION
+// 1. TAB NAVIGATION & MATHEMATICAL RENDERING
 // ============================================================================
 document.addEventListener("DOMContentLoaded", () => {
     initTabs();
     initNashSolver();
     initBenchmark();
     initSimulation();
+    initMathRendering();
 });
+
+function initMathRendering() {
+    // If KaTeX auto-render extension is available, typeset mathematics on page
+    if (typeof renderMathInElement === "function") {
+        renderMathInElement(document.body, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\[", right: "\\]", display: true },
+                { left: "\\(", right: "\\)", display: false }
+            ],
+            throwOnError: false
+        });
+    } else {
+        // Retry shortly in case defer script loads slightly after DOMContentLoaded
+        setTimeout(() => {
+            if (typeof renderMathInElement === "function") {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        { left: "$$", right: "$$", display: true },
+                        { left: "$", right: "$", display: false },
+                        { left: "\\[", right: "\\]", display: true },
+                        { left: "\\(", right: "\\)", display: false }
+                    ],
+                    throwOnError: false
+                });
+            }
+        }, 500);
+    }
+}
 
 function initTabs() {
     const tabs = document.querySelectorAll(".nav-btn");
@@ -26,6 +58,11 @@ function initTabs() {
             const targetId = `tab-${tab.getAttribute("data-tab")}`;
             const targetEl = document.getElementById(targetId);
             if (targetEl) targetEl.classList.add("active");
+
+            // Re-render math if switching to theory tab to ensure proper typesetting
+            if (targetId === "tab-theory") {
+                setTimeout(initMathRendering, 60);
+            }
         });
     });
 }
@@ -75,13 +112,40 @@ function initNashSolver() {
     const presetSelect = document.getElementById("matrix-preset");
     const recomputeBtn = document.getElementById("btn-recompute-nash");
 
-    presetSelect.addEventListener("change", (e) => {
-        loadPreset(e.target.value);
-        computeAndRenderNash();
-    });
+    if (presetSelect) {
+        presetSelect.addEventListener("change", (e) => {
+            if (e.target.value !== "custom") {
+                loadPreset(e.target.value);
+            }
+            computeAndRenderNash();
+        });
+    }
 
-    recomputeBtn.addEventListener("click", () => {
-        computeAndRenderNash();
+    if (recomputeBtn) {
+        recomputeBtn.addEventListener("click", () => {
+            computeAndRenderNash();
+            const orig = recomputeBtn.textContent;
+            recomputeBtn.textContent = "✓ Equilibria Computed!";
+            recomputeBtn.style.boxShadow = "0 0 15px rgba(0, 212, 255, 0.7)";
+            setTimeout(() => {
+                recomputeBtn.textContent = orig;
+                recomputeBtn.style.boxShadow = "";
+            }, 1200);
+        });
+    }
+
+    // Auto-recompute on any input cell change, keyup, or step
+    const inputs = document.querySelectorAll(".input-payoff");
+    inputs.forEach(input => {
+        const handler = () => {
+            if (presetSelect && presetSelect.value !== "custom") {
+                presetSelect.value = "custom";
+            }
+            computeAndRenderNash();
+        };
+        input.addEventListener("input", handler);
+        input.addEventListener("change", handler);
+        input.addEventListener("keyup", handler);
     });
 
     // Initial load
@@ -92,25 +156,34 @@ function initNashSolver() {
 function loadPreset(key) {
     const p = PRESETS[key];
     if (!p) return;
-    document.getElementById("cell-00-a").value = p.a[0][0];
-    document.getElementById("cell-00-b").value = p.b[0][0];
-    document.getElementById("cell-01-a").value = p.a[0][1];
-    document.getElementById("cell-01-b").value = p.b[0][1];
-    document.getElementById("cell-10-a").value = p.a[1][0];
-    document.getElementById("cell-10-b").value = p.b[1][0];
-    document.getElementById("cell-11-a").value = p.a[1][1];
-    document.getElementById("cell-11-b").value = p.b[1][1];
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    };
+    setVal("cell-00-a", p.a[0][0]);
+    setVal("cell-00-b", p.b[0][0]);
+    setVal("cell-01-a", p.a[0][1]);
+    setVal("cell-01-b", p.b[0][1]);
+    setVal("cell-10-a", p.a[1][0]);
+    setVal("cell-10-b", p.b[1][0]);
+    setVal("cell-11-a", p.a[1][1]);
+    setVal("cell-11-b", p.b[1][1]);
 }
 
 function getMatrixFromInputs() {
+    const getVal = (id, defaultVal = 0) => {
+        const el = document.getElementById(id);
+        if (!el || el.value.trim() === "" || isNaN(parseFloat(el.value))) return defaultVal;
+        return parseFloat(el.value);
+    };
     return {
         a: [
-            [parseFloat(document.getElementById("cell-00-a").value), parseFloat(document.getElementById("cell-01-a").value)],
-            [parseFloat(document.getElementById("cell-10-a").value), parseFloat(document.getElementById("cell-11-a").value)]
+            [getVal("cell-00-a", -100), getVal("cell-01-a", 10)],
+            [getVal("cell-10-a", 2), getVal("cell-11-a", 0)]
         ],
         b: [
-            [parseFloat(document.getElementById("cell-00-b").value), parseFloat(document.getElementById("cell-01-b").value)],
-            [parseFloat(document.getElementById("cell-10-b").value), parseFloat(document.getElementById("cell-11-b").value)]
+            [getVal("cell-00-b", -100), getVal("cell-01-b", 2)],
+            [getVal("cell-10-b", 10), getVal("cell-11-b", 0)]
         ]
     };
 }
@@ -118,22 +191,91 @@ function getMatrixFromInputs() {
 function computeAndRenderNash() {
     const { a, b } = getMatrixFromInputs();
     const outputEl = document.getElementById("nash-results-output");
+    const statusText = document.getElementById("solver-status-text");
+    const calcTime = document.getElementById("solver-calc-time");
 
-    // 1. Pure Strategy NE
+    // 1. Identify Best Responses for Player A and Player B
+    // Player A best response in Col 0:
+    const brA_col0 = a[0][0] >= a[1][0] ? (a[0][0] === a[1][0] ? [0, 1] : [0]) : [1];
+    // Player A best response in Col 1:
+    const brA_col1 = a[0][1] >= a[1][1] ? (a[0][1] === a[1][1] ? [0, 1] : [0]) : [1];
+
+    // Player B best response in Row 0:
+    const brB_row0 = b[0][0] >= b[0][1] ? (b[0][0] === b[0][1] ? [0, 1] : [0]) : [1];
+    // Player B best response in Row 1:
+    const brB_row1 = b[1][0] >= b[1][1] ? (b[1][0] === b[1][1] ? [0, 1] : [0]) : [1];
+
+    // Highlight inputs according to best responses
+    const updateInputHighlight = (id, isBest) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle("best-response-a", isBest);
+    };
+    const updateInputHighlightB = (id, isBest) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle("best-response-b", isBest);
+    };
+
+    updateInputHighlight("cell-00-a", brA_col0.includes(0));
+    updateInputHighlight("cell-10-a", brA_col0.includes(1));
+    updateInputHighlight("cell-01-a", brA_col1.includes(0));
+    updateInputHighlight("cell-11-a", brA_col1.includes(1));
+
+    updateInputHighlightB("cell-00-b", brB_row0.includes(0));
+    updateInputHighlightB("cell-01-b", brB_row0.includes(1));
+    updateInputHighlightB("cell-10-b", brB_row1.includes(0));
+    updateInputHighlightB("cell-11-b", brB_row1.includes(1));
+
+    // 2. Pure Strategy NE
     const pureNE = [];
     for (let r = 0; r < 2; r++) {
         for (let c = 0; c < 2; c++) {
-            const isBestA = a[r][c] >= a[1 - r][c];
-            const isBestB = b[r][c] >= b[r][1 - c];
+            const isBestA = (c === 0 && brA_col0.includes(r)) || (c === 1 && brA_col1.includes(r));
+            const isBestB = (r === 0 && brB_row0.includes(c)) || (r === 1 && brB_row1.includes(c));
             if (isBestA && isBestB) {
                 pureNE.push({ row: r, col: c, payoffA: a[r][c], payoffB: b[r][c] });
             }
         }
     }
 
-    // 2. Mixed Strategy NE (Indifference Condition)
+    // 3. Pareto Optimality Check
+    function isPareto(r, c) {
+        const ua = a[r][c];
+        const ub = b[r][c];
+        for (let i = 0; i < 2; i++) {
+            for (let j = 0; j < 2; j++) {
+                if (a[i][j] >= ua && b[i][j] >= ub && (a[i][j] > ua || b[i][j] > ub)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    // Update table cell classes and badges
+    for (let r = 0; r < 2; r++) {
+        for (let c = 0; c < 2; c++) {
+            const td = document.getElementById(`td-cell-${r}${c}`);
+            const label = document.getElementById(`cell-${r}${c}-label`);
+            const isNE = pureNE.some(ne => ne.row === r && ne.col === c);
+            const pareto = isPareto(r, c);
+            const welfare = a[r][c] + b[r][c];
+
+            if (td) {
+                td.classList.toggle("is-nash", isNE);
+                td.classList.toggle("is-pareto", pareto && !isNE);
+            }
+            if (label) {
+                if (isNE) {
+                    label.innerHTML = `<span class="cell-nash-badge ${pareto ? 'pareto' : ''}">★ Pure NE ${pareto ? '(Pareto)' : ''}</span><br><span style="font-size:0.75rem; color:#8b949e">Welfare: ${welfare}</span>`;
+                } else {
+                    label.innerHTML = `Welfare: ${welfare} ${pareto ? '<span style="color:var(--accent-cyan)">• Pareto Frontier</span>' : ''}`;
+                }
+            }
+        }
+    }
+
+    // 4. Mixed Strategy NE (Indifference Condition)
     // q * a[0][0] + (1-q) * a[0][1] = q * a[1][0] + (1-q) * a[1][1]
-    // q * (a00 - a01 - a10 + a11) = a11 - a01
     let mixedNE = null;
     const denomA = (a[0][0] - a[0][1] - a[1][0] + a[1][1]);
     const numA = (a[1][1] - a[0][1]);
@@ -150,18 +292,34 @@ function computeAndRenderNash() {
         mixedNE = { p, q, expPayoffA, expPayoffB };
     }
 
-    // 3. Pareto Optimality Check
-    function isPareto(r, c) {
-        const ua = a[r][c];
-        const ub = b[r][c];
-        for (let i = 0; i < 2; i++) {
-            for (let j = 0; j < 2; j++) {
-                if (a[i][j] >= ua && b[i][j] >= ub && (a[i][j] > ua || b[i][j] > ub)) {
-                    return false;
-                }
-            }
+    // 5. Dominant Strategy Detection
+    let domA = "No strictly dominant strategy (Best response depends on Player B)";
+    if (a[0][0] > a[1][0] && a[0][1] > a[1][1]) domA = "Action 0 (Go) strictly dominates Action 1 (Yield)";
+    else if (a[1][0] > a[0][0] && a[1][1] > a[0][1]) domA = "Action 1 (Yield) strictly dominates Action 0 (Go)";
+
+    let domB = "No strictly dominant strategy (Best response depends on Player A)";
+    if (b[0][0] > b[0][1] && b[1][0] > b[1][1]) domB = "Action 0 (Go) strictly dominates Action 1 (Yield)";
+    else if (b[0][1] > b[0][0] && b[1][1] > b[1][0]) domB = "Action 1 (Yield) strictly dominates Action 0 (Go)";
+
+    // 6. Social Welfare and Price of Anarchy
+    const allWelfares = [
+        a[0][0] + b[0][0],
+        a[0][1] + b[0][1],
+        a[1][0] + b[1][0],
+        a[1][1] + b[1][1]
+    ];
+    const maxWelfare = Math.max(...allWelfares);
+    let poaText = "N/A";
+    if (pureNE.length > 0) {
+        const neWelfares = pureNE.map(ne => ne.payoffA + ne.payoffB);
+        const worstNeWelfare = Math.min(...neWelfares);
+        if (worstNeWelfare > 0 && maxWelfare > 0) {
+            poaText = (maxWelfare / worstNeWelfare).toFixed(2);
+        } else if (worstNeWelfare === maxWelfare) {
+            poaText = "1.00 (Optimal Welfare)";
+        } else {
+            poaText = `${maxWelfare} / ${worstNeWelfare}`;
         }
-        return true;
     }
 
     // Render HTML Output
@@ -181,13 +339,13 @@ function computeAndRenderNash() {
                         </div>
                     </div>
                     <div class="eq-detail">
-                        Payoff Profile: (A: ${ne.payoffA}, B: ${ne.payoffB}) | Social Welfare: ${ne.payoffA + ne.payoffB}
+                        Payoff Profile: (Player A: ${ne.payoffA}, Player B: ${ne.payoffB}) | Social Welfare: ${ne.payoffA + ne.payoffB}
                     </div>
                 </div>
             `;
         });
     } else {
-        html += `<div class="empty-state">No Pure-Strategy Nash Equilibrium exists for this payoff matrix.</div>`;
+        html += `<div class="empty-state">No Pure-Strategy Nash Equilibrium exists for this payoff configuration.</div>`;
     }
 
     if (mixedNE) {
@@ -198,15 +356,37 @@ function computeAndRenderNash() {
                     <span class="eq-badge">Mixed NE</span>
                 </div>
                 <div class="eq-detail">
-                    <div>Player A strategy: σ_A = (${mixedNE.p.toFixed(3)} Go, ${(1 - mixedNE.p).toFixed(3)} Yield)</div>
-                    <div>Player B strategy: σ_B = (${mixedNE.q.toFixed(3)} Go, ${(1 - mixedNE.q).toFixed(3)} Yield)</div>
-                    <div style="margin-top:6px; color: var(--accent-yellow)">Expected Payoffs: (A: ${mixedNE.expPayoffA.toFixed(2)}, B: ${mixedNE.expPayoffB.toFixed(2)})</div>
+                    <div>Player A strategy: σ_A = (${(mixedNE.p * 100).toFixed(1)}% Go, ${((1 - mixedNE.p) * 100).toFixed(1)}% Yield)</div>
+                    <div>Player B strategy: σ_B = (${(mixedNE.q * 100).toFixed(1)}% Go, ${((1 - mixedNE.q) * 100).toFixed(1)}% Yield)</div>
+                    <div style="margin-top:6px; color: var(--accent-yellow)">Expected Payoffs: (A: ${mixedNE.expPayoffA.toFixed(2)}, B: ${mixedNE.expPayoffB.toFixed(2)}) | Exp Welfare: ${(mixedNE.expPayoffA + mixedNE.expPayoffB).toFixed(2)}</div>
                 </div>
             </div>
         `;
     }
 
+    html += `
+        <div class="eq-card" style="border-left-color: var(--accent-purple);">
+            <div class="eq-title">
+                <span>Strategic Insights & Social Optimality</span>
+                <span class="eq-badge" style="color:var(--accent-purple); background:rgba(138,43,226,0.15)">Analysis</span>
+            </div>
+            <div class="eq-detail" style="line-height: 1.6;">
+                <div><strong>Player A Dominance:</strong> ${domA}</div>
+                <div><strong>Player B Dominance:</strong> ${domB}</div>
+                <div style="margin-top:4px;"><strong>Social Optimum (Max Welfare):</strong> ${maxWelfare} | <strong>Price of Anarchy (PoA):</strong> ${poaText}</div>
+            </div>
+        </div>
+    `;
+
     outputEl.innerHTML = html;
+
+    if (statusText) {
+        statusText.innerHTML = `● Solved: ${pureNE.length} Pure NE ${mixedNE ? '+ 1 Mixed NE' : ''} | Real-Time Active`;
+    }
+    if (calcTime) {
+        const now = new Date();
+        calcTime.textContent = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    }
 }
 
 // ============================================================================
@@ -221,7 +401,7 @@ const BENCHMARK_DATA = [
         fairness: "0.985",
         poa: "66.7",
         welfare: "12.0",
-        advantage: "Decentralized, no communication required"
+        advantage: "Decentralized, zero communication required"
     },
     {
         name: "Stackelberg Leader-Follower",
@@ -231,7 +411,7 @@ const BENCHMARK_DATA = [
         fairness: "0.833",
         poa: "1.00",
         welfare: "12.0",
-        advantage: "Zero collisions, eliminated coordination failure"
+        advantage: "Zero collisions, eliminates coordination failure"
     },
     {
         name: "Bayesian Mixed Traffic (AV vs HDV)",
@@ -280,34 +460,36 @@ function initBenchmark() {
     tbody.innerHTML = BENCHMARK_DATA.map(row => `
         <tr>
             <td><strong>${row.name}</strong></td>
-            <td><span style="color: ${row.collisionRate === '0.0%' ? 'var(--accent-green)' : 'var(--accent-red)'}">${row.collisionRate}</span></td>
+            <td><span style="color: ${row.collisionRate === '0.0%' ? 'var(--accent-green)' : 'var(--accent-red)'}; font-weight:600;">${row.collisionRate}</span></td>
             <td>${row.delay}</td>
             <td>${row.throughput}</td>
             <td>${row.fairness}</td>
             <td>${row.poa}</td>
             <td><strong>${row.welfare}</strong></td>
-            <td><span style="color: var(--text-secondary); font-size: 0.8rem">${row.advantage}</span></td>
+            <td><span style="color: var(--text-secondary); font-size: 0.82rem">${row.advantage}</span></td>
         </tr>
     `).join("");
 
     renderBenchmarkCharts();
 
-    document.getElementById("btn-export-csv").addEventListener("click", () => {
-        let csv = "Mechanism,Collision Rate,Avg Delay,Throughput,Fairness,PoA,Social Welfare,Advantage\n";
-        BENCHMARK_DATA.forEach(r => {
-            csv += `"${r.name}","${r.collisionRate}","${r.delay}","${r.throughput}","${r.fairness}","${r.poa}","${r.welfare}","${r.advantage}"\n`;
+    const exportBtn = document.getElementById("btn-export-csv");
+    if (exportBtn) {
+        exportBtn.addEventListener("click", () => {
+            let csv = "Mechanism,Collision Rate,Avg Delay,Throughput,Fairness,PoA,Social Welfare,Advantage\n";
+            BENCHMARK_DATA.forEach(r => {
+                csv += `"${r.name}","${r.collisionRate}","${r.delay}","${r.throughput}","${r.fairness}","${r.poa}","${r.welfare}","${r.advantage}"\n`;
+            });
+            const blob = new Blob([csv], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "intersection_game_benchmark.csv";
+            a.click();
         });
-        const blob = new Blob([csv], { type: "text/csv" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "intersection_game_benchmark.csv";
-        a.click();
-    });
+    }
 }
 
 function renderBenchmarkCharts() {
-    // Canvas Bar Chart: Throughput comparison
     const canvas = document.getElementById("chart-efficiency");
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -327,23 +509,19 @@ function renderBenchmarkCharts() {
         const h = (val / maxVal) * 150;
         const y = baseY - h;
 
-        // Gradient bar
         const grad = ctx.createLinearGradient(x, y, x, baseY);
         grad.addColorStop(0, "#00d4ff");
         grad.addColorStop(1, "#0066aa");
         ctx.fillStyle = grad;
         ctx.fillRect(x, y, barWidth, h);
 
-        // Value text
         ctx.fillStyle = "#ffffff";
         ctx.fillText(val.toString(), x + 10, y - 6);
 
-        // Label
         ctx.fillStyle = "#8b949e";
         ctx.fillText(labels[i], x + 5, baseY + 18);
     });
 
-    // Safety chart
     const canvasSafety = document.getElementById("chart-safety");
     if (!canvasSafety) return;
     const ctxS = canvasSafety.getContext("2d");
@@ -351,15 +529,15 @@ function renderBenchmarkCharts() {
 
     ctxS.font = "12px Outfit, sans-serif";
     ctxS.fillStyle = "#2ecc71";
-    ctxS.fillText("Stackelberg, Bayesian, Auction, Voting, Signal: 0.0% Collisions (Proven Safe)", 20, 70);
+    ctxS.fillText("Stackelberg, Bayesian, Auction, Voting, Signal: 0.0% Collisions (Proven Safe)", 20, 60);
 
     ctxS.fillStyle = "#e74c3c";
-    ctxS.fillText("Nash Decentralized Mixed Strategy: 0.8% Coordination Collision Risk", 20, 110);
+    ctxS.fillText("Nash Decentralized Mixed Strategy: 0.8% Coordination Collision Risk", 20, 100);
 
     ctxS.fillStyle = "#8b949e";
     ctxS.font = "11px Outfit, sans-serif";
-    ctxS.fillText("Coordination failure in symmetric simultaneous play occurs when both vehicles", 20, 150);
-    ctxS.fillText("randomize and sample 'Go' at the same instant (Hawk-Hawk dilemma).", 20, 168);
+    ctxS.fillText("Coordination failure in symmetric simultaneous play occurs when both vehicles", 20, 140);
+    ctxS.fillText("randomize and simultaneously sample 'Go' (Hawk-Hawk dilemma).", 20, 158);
 }
 
 // ============================================================================
@@ -373,6 +551,9 @@ let simDelays = [];
 let simMode = "stackelberg";
 let signalPhase = "NS";
 let signalTimer = 0;
+let activePriorityWinnerId = null;
+let autoFlowEnabled = false;
+let autoFlowTimer = 0;
 
 const DESCRIPTIONS = {
     nash: "Decentralized Normal-Form Game: Vehicles simultaneously randomize over Go/Yield based on mixed NE. Low collision probability occurs during simultaneous 'Go' sampling.",
@@ -384,13 +565,12 @@ const DESCRIPTIONS = {
 };
 
 class SimVehicle {
-    constructor(id, direction, isAv = true, urgency = 5.0, isEmergency = false) {
+    constructor(id, direction, isAv = true, urgency = 5.0, isEmergency = false, startOffset = 290) {
         this.id = id;
         this.direction = direction; // 'north', 'south', 'east', 'west'
         this.isAv = isAv;
         this.urgency = urgency;
         this.isEmergency = isEmergency;
-
         this.length = 32;
         this.width = 18;
         this.speed = 0;
@@ -398,32 +578,34 @@ class SimVehicle {
         this.action = "go";
         this.state = "approaching"; // 'approaching', 'yielding', 'crossing', 'passed', 'collided'
         this.waitingTime = 0;
+        this.counted = false;
 
         this.centerX = 380;
         this.centerY = 325;
+        this.startOffset = startOffset;
         this.initPos();
     }
 
     initPos() {
-        const offset = 290;
+        const offset = this.startOffset;
         const laneOffset = 20;
 
         if (this.direction === "north") {
             this.x = this.centerX - laneOffset;
             this.y = this.centerY - offset;
-            this.speed = this.maxSpeed * 0.8;
+            this.speed = this.maxSpeed * 0.85;
         } else if (this.direction === "south") {
             this.x = this.centerX + laneOffset;
             this.y = this.centerY + offset;
-            this.speed = this.maxSpeed * 0.8;
+            this.speed = this.maxSpeed * 0.85;
         } else if (this.direction === "east") {
             this.x = this.centerX + offset;
             this.y = this.centerY - laneOffset;
-            this.speed = this.maxSpeed * 0.8;
+            this.speed = this.maxSpeed * 0.85;
         } else if (this.direction === "west") {
             this.x = this.centerX - offset;
             this.y = this.centerY + laneOffset;
-            this.speed = this.maxSpeed * 0.8;
+            this.speed = this.maxSpeed * 0.85;
         }
     }
 
@@ -435,6 +617,15 @@ class SimVehicle {
         return Math.abs(this.x - this.centerX) <= 80 && Math.abs(this.y - this.centerY) <= 80;
     }
 
+    hasClearedConflict() {
+        // Vehicle center has passed the critical intersection box center line
+        if (this.direction === "north") return this.y > this.centerY + 65;
+        if (this.direction === "south") return this.y < this.centerY - 65;
+        if (this.direction === "east") return this.x < this.centerX - 65;
+        if (this.direction === "west") return this.x > this.centerX + 65;
+        return false;
+    }
+
     hasExited() {
         if (this.direction === "north") return this.y > this.centerY + 120;
         if (this.direction === "south") return this.y < this.centerY - 120;
@@ -444,19 +635,25 @@ class SimVehicle {
     }
 
     update() {
-        if (this.state === "collided") return;
+        if (this.state === "collided") {
+            this.speed = 0;
+            return;
+        }
 
-        if (this.hasExited()) {
+        if (this.hasClearedConflict()) {
             this.state = "passed";
-            this.speed = this.maxSpeed;
+            this.action = "go";
         }
 
         const targetSpeed = this.action === "go" ? this.maxSpeed : 0.0;
-        if (this.speed < targetSpeed) this.speed = Math.min(targetSpeed, this.speed + 0.1);
-        if (this.speed > targetSpeed) this.speed = Math.max(targetSpeed, this.speed - 0.2);
+        if (this.speed < targetSpeed) this.speed = Math.min(targetSpeed, this.speed + 0.14);
+        if (this.speed > targetSpeed) this.speed = Math.max(targetSpeed, this.speed - 0.24);
 
-        if (this.speed < 0.2 && this.state !== "passed") {
+        if (this.speed < 0.25 && this.state !== "passed") {
             this.waitingTime += 0.016;
+            if (!this.isInside() && this.action === "yield") {
+                this.state = "yielding";
+            }
         }
 
         if (this.direction === "north") this.y += this.speed;
@@ -464,32 +661,48 @@ class SimVehicle {
         if (this.direction === "east") this.x -= this.speed;
         if (this.direction === "west") this.x += this.speed;
 
-        if (this.isInside() && this.state !== "collided") {
+        if (this.isInside() && this.state !== "collided" && this.state !== "passed") {
             this.state = "crossing";
         }
     }
 }
 
 function initSimulation() {
-    const canvas = document.getElementById("sim-canvas");
     const select = document.getElementById("mechanism-select");
     const desc = document.getElementById("mechanism-description");
     const btnSpawn = document.getElementById("btn-spawn");
+    const btnAutoFlow = document.getElementById("btn-auto-flow");
     const btnPause = document.getElementById("btn-toggle-pause");
     const btnReset = document.getElementById("btn-reset");
 
-    select.addEventListener("change", (e) => {
-        simMode = e.target.value;
-        desc.textContent = DESCRIPTIONS[simMode] || "";
-    });
+    if (select) {
+        select.addEventListener("change", (e) => {
+            simMode = e.target.value;
+            if (desc) desc.textContent = DESCRIPTIONS[simMode] || "";
+            activePriorityWinnerId = null;
+        });
+    }
 
-    btnSpawn.addEventListener("click", () => spawnWave());
-    btnPause.addEventListener("click", () => {
-        simRunning = !simRunning;
-        btnPause.textContent = simRunning ? "⏸ Pause" : "▶ Resume";
-        document.getElementById("sim-status-badge").textContent = simRunning ? "Running" : "Paused";
-    });
-    btnReset.addEventListener("click", () => resetSim());
+    if (btnSpawn) btnSpawn.addEventListener("click", () => spawnWave());
+
+    if (btnAutoFlow) {
+        btnAutoFlow.addEventListener("click", () => {
+            autoFlowEnabled = !autoFlowEnabled;
+            btnAutoFlow.textContent = autoFlowEnabled ? "⚡ Auto Flow: ON" : "⚡ Auto Flow: OFF";
+            btnAutoFlow.classList.toggle("active-pulse", autoFlowEnabled);
+        });
+    }
+
+    if (btnPause) {
+        btnPause.addEventListener("click", () => {
+            simRunning = !simRunning;
+            btnPause.textContent = simRunning ? "⏸ Pause" : "▶ Resume";
+            const badge = document.getElementById("sim-status-badge");
+            if (badge) badge.textContent = simRunning ? "Running" : "Paused";
+        });
+    }
+
+    if (btnReset) btnReset.addEventListener("click", () => resetSim());
 
     // Initial spawn
     spawnWave();
@@ -497,16 +710,30 @@ function initSimulation() {
 }
 
 function spawnWave() {
-    const dirs = ["north", "south", "east", "west"];
+    const allDirs = ["north", "south", "east", "west"];
     const id = Math.floor(Math.random() * 900) + 100;
     
-    // Pick 2 or 3 directions
-    const chosenDirs = dirs.sort(() => 0.5 - Math.random()).slice(0, 3);
+    // Pick 2 to 4 distinct directions to prevent spawning multiple cars at identical spawn coordinates
+    const numVehicles = Math.min(4, Math.floor(Math.random() * 3) + 2);
+    const chosenDirs = [...allDirs].sort(() => 0.5 - Math.random()).slice(0, numVehicles);
+
+    // Track active vehicles per direction to compute trailing start distance
+    const activeVehicles = simVehicles.filter(v => v.state !== "passed" && v.state !== "collided");
+
     chosenDirs.forEach((d, idx) => {
-        const isEmg = idx === 0 && Math.random() < 0.25;
+        // Find existing vehicles in this lane
+        const inLane = activeVehicles.filter(v => v.direction === d);
+        let startOffset = 290;
+        if (inLane.length > 0) {
+            // Place behind the last vehicle in this lane by at least 65 pixels
+            const maxCenterDist = Math.max(...inLane.map(v => v.distToCenter()));
+            startOffset = Math.max(290, maxCenterDist + 65);
+        }
+
+        const isEmg = idx === 0 && Math.random() < 0.22;
         const isAv = Math.random() < 0.75;
         const urgency = parseFloat((Math.random() * 8 + 2).toFixed(1));
-        const v = new SimVehicle(`V${id + idx}`, d, isAv, urgency, isEmg);
+        const v = new SimVehicle(`V${id + idx}`, d, isAv, urgency, isEmg, startOffset);
         simVehicles.push(v);
     });
 
@@ -518,12 +745,14 @@ function resetSim() {
     simCollisions = 0;
     simThroughput = 0;
     simDelays = [];
+    activePriorityWinnerId = null;
     updateMetricsUI();
     updateLedger();
 }
 
 function updateLedger() {
     const ledger = document.getElementById("vehicle-ledger");
+    if (!ledger) return;
     const active = simVehicles.filter(v => v.state !== "passed" && v.state !== "collided");
     if (active.length === 0) {
         ledger.innerHTML = `<div class="empty-state">No approaching vehicles. Click "Spawn Wave" above.</div>`;
@@ -533,83 +762,244 @@ function updateLedger() {
         <div class="ledger-row">
             <span>${v.id} (${v.direction.toUpperCase()}) ${v.isEmergency ? '🚨' : (v.isAv ? '🤖' : '👤')}</span>
             <span>Urgency: ${v.urgency}</span>
-            <span style="color: ${v.action === 'go' ? 'var(--accent-green)' : 'var(--accent-yellow)'}">${v.action.toUpperCase()}</span>
+            <span style="color: ${v.action === 'go' ? 'var(--accent-green)' : 'var(--accent-yellow)'}; font-weight:600;">${v.action.toUpperCase()}</span>
         </div>
     `).join("");
 }
 
-function coordinateVehicles() {
-    const active = simVehicles.filter(v => v.state !== "passed" && v.state !== "collided");
-    const approaching = active.filter(v => v.distToCenter() <= 160 && !v.isInside());
+function enforceSameLaneCarFollowing(active) {
+    const byDir = { north: [], south: [], east: [], west: [] };
+    active.forEach(v => {
+        if (byDir[v.direction]) byDir[v.direction].push(v);
+    });
 
+    const SAFE_GAP = 52; // minimum safe gap buffer between vehicle centers
+
+    // Apply car following in a sorted lane list (index 0 is front-most car)
+    const applyFollowing = (lane, getGap) => {
+        for (let i = 1; i < lane.length; i++) {
+            const lead = lane[i - 1];
+            const trail = lane[i];
+            const gap = getGap(lead, trail);
+
+            if (gap < SAFE_GAP) {
+                if (lead.action === "yield" || lead.speed < 0.4) {
+                    // Lead vehicle is stopped or yielding; trail vehicle stops behind it
+                    trail.action = "yield";
+                } else {
+                    // Lead vehicle is cruising forward; trail follows smoothly!
+                    trail.action = "go";
+                    trail.speed = Math.min(trail.maxSpeed, Math.max(0.5, lead.speed * 0.95));
+                }
+            } else {
+                // Gap is open! Trailing car accelerates to fill up space up to the stop line
+                if (trail.distToCenter() > 90) {
+                    trail.action = "go";
+                }
+            }
+        }
+    };
+
+    // North (heading south, y increases: larger y is ahead)
+    byDir.north.sort((a, b) => b.y - a.y);
+    applyFollowing(byDir.north, (lead, trail) => lead.y - trail.y);
+
+    // South (heading north, y decreases: smaller y is ahead)
+    byDir.south.sort((a, b) => a.y - b.y);
+    applyFollowing(byDir.south, (lead, trail) => trail.y - lead.y);
+
+    // East (heading west, x decreases: smaller x is ahead)
+    byDir.east.sort((a, b) => a.x - b.x);
+    applyFollowing(byDir.east, (lead, trail) => trail.x - lead.x);
+
+    // West (heading east, x increases: larger x is ahead)
+    byDir.west.sort((a, b) => b.x - a.x);
+    applyFollowing(byDir.west, (lead, trail) => lead.x - trail.x);
+}
+
+function coordinateVehicles() {
+    const active = simVehicles.filter(v => v.state !== "collided");
+
+    // 1. Reset action to "go" for every vehicle by default so queues never freeze
+    active.forEach(v => {
+        v.action = "go";
+    });
+
+    // 2. Correlated Traffic Signal (Alternating green phases)
     if (simMode === "correlated") {
         signalTimer += 0.016;
-        if (signalTimer >= 2.5) {
+        if (signalTimer >= 3.2) {
             signalTimer = 0;
             signalPhase = signalPhase === "NS" ? "EW" : "NS";
         }
+
+        const nsInBox = active.some(v => v.isInside() && (v.direction === "north" || v.direction === "south"));
+        const ewInBox = active.some(v => v.isInside() && (v.direction === "east" || v.direction === "west"));
+
         active.forEach(v => {
-            if (v.isInside()) {
+            if (v.isInside() || v.hasClearedConflict()) {
                 v.action = "go";
                 return;
             }
-            if (signalPhase === "NS") {
-                v.action = (v.direction === "north" || v.direction === "south") ? "go" : "yield";
-            } else {
-                v.action = (v.direction === "east" || v.direction === "west") ? "go" : "yield";
+            // Vehicles approaching the stop line
+            const isApproachingStop = v.distToCenter() <= 170;
+            if (isApproachingStop) {
+                if (signalPhase === "NS") {
+                    // NS green if EW cleared; EW must yield at stop line
+                    if (v.direction === "north" || v.direction === "south") {
+                        v.action = ewInBox ? "yield" : "go";
+                    } else {
+                        v.action = "yield";
+                    }
+                } else {
+                    // EW green if NS cleared; NS must yield at stop line
+                    if (v.direction === "east" || v.direction === "west") {
+                        v.action = nsInBox ? "yield" : "go";
+                    } else {
+                        v.action = "yield";
+                    }
+                }
             }
         });
+
+        enforceSameLaneCarFollowing(active);
         return;
     }
 
-    if (approaching.length < 2) {
-        approaching.forEach(v => v.action = "go");
+    // 3. Priority & Game-Theoretic Coordination
+    // Find the lead vehicle of each approaching direction (the front of the queue outside intersection)
+    const byDir = { north: [], south: [], east: [], west: [] };
+    active.forEach(v => {
+        if (!v.isInside() && !v.hasClearedConflict()) {
+            byDir[v.direction].push(v);
+        }
+    });
+
+    // In each direction, find the front-most vehicle
+    const leadCandidates = [];
+    Object.keys(byDir).forEach(dir => {
+        const list = byDir[dir];
+        if (list.length > 0) {
+            list.sort((a, b) => a.distToCenter() - b.distToCenter());
+            const lead = list[0];
+            // Only consider competing if within stopping decision zone (<= 170px)
+            if (lead.distToCenter() <= 170) {
+                leadCandidates.push(lead);
+            }
+        }
+    });
+
+    // If a priority winner is currently inside crossing the intersection, let it finish clearing
+    if (activePriorityWinnerId) {
+        const winner = active.find(v => v.id === activePriorityWinnerId);
+        if (winner && !winner.hasClearedConflict() && winner.state !== "collided") {
+            // Priority winner proceeds; conflicting leads must yield
+            leadCandidates.forEach(v => {
+                if (v.id !== activePriorityWinnerId) {
+                    const isSameCorridor = (
+                        (winner.direction === "north" && v.direction === "south") ||
+                        (winner.direction === "south" && v.direction === "north") ||
+                        (winner.direction === "east" && v.direction === "west") ||
+                        (winner.direction === "west" && v.direction === "east")
+                    );
+                    if (!isSameCorridor) {
+                        v.action = "yield";
+                    }
+                } else {
+                    v.action = "go";
+                }
+            });
+            enforceSameLaneCarFollowing(active);
+            return;
+        } else {
+            // Winner cleared conflict zone! Release priority lock immediately
+            activePriorityWinnerId = null;
+        }
+    }
+
+    // If any car is currently inside the conflict zone, perpendicular cars must wait
+    const crossingCar = active.find(v => v.isInside() && !v.hasClearedConflict());
+    if (crossingCar) {
+        leadCandidates.forEach(v => {
+            const isPerpendicular = (
+                ((crossingCar.direction === "north" || crossingCar.direction === "south") && (v.direction === "east" || v.direction === "west")) ||
+                ((crossingCar.direction === "east" || crossingCar.direction === "west") && (v.direction === "north" || v.direction === "south"))
+            );
+            if (isPerpendicular) {
+                v.action = "yield";
+            }
+        });
+        enforceSameLaneCarFollowing(active);
         return;
     }
 
-    if (simMode === "stackelberg") {
-        // Closest vehicle goes, others yield
-        approaching.sort((a, b) => a.distToCenter() - b.distToCenter());
-        approaching[0].action = "go";
-        for (let i = 1; i < approaching.length; i++) approaching[i].action = "yield";
-    } else if (simMode === "auction") {
-        // Emergency vehicle first, else highest urgency wins
-        approaching.sort((a, b) => {
-            if (a.isEmergency !== b.isEmergency) return b.isEmergency ? 1 : -1;
-            return b.urgency - a.urgency;
-        });
-        approaching[0].action = "go";
-        for (let i = 1; i < approaching.length; i++) approaching[i].action = "yield";
-    } else if (simMode === "voting") {
-        // Emergency has veto weight, else sort by urgency + waiting
-        approaching.sort((a, b) => {
-            const scoreA = (a.isEmergency ? 50 : 0) + a.urgency + a.waitingTime * 2;
-            const scoreB = (b.isEmergency ? 50 : 0) + b.urgency + b.waitingTime * 2;
-            return scoreB - scoreA;
-        });
-        approaching[0].action = "go";
-        for (let i = 1; i < approaching.length; i++) approaching[i].action = "yield";
-    } else if (simMode === "bayesian") {
-        // AV yields conservatively to human driver
-        const av = approaching.find(v => v.isAv);
-        const hdv = approaching.find(v => !v.isAv);
-        if (av && hdv) {
-            av.action = "yield";
-            hdv.action = "go";
-        } else {
-            approaching[0].action = "go";
-            approaching[1].action = "yield";
-        }
-    } else if (simMode === "nash") {
-        // Mixed strategy sample: small probability of mutual Go
-        if (Math.random() < 0.08) {
-            approaching[0].action = "go";
-            approaching[1].action = "go"; // Coordination collision!
-        } else {
-            approaching[0].action = "go";
-            approaching[1].action = "yield";
+    // No car currently in conflict zone! Decide priority among lead candidates
+    if (leadCandidates.length >= 2) {
+        if (simMode === "stackelberg") {
+            // Closest vehicle commits to Go as Leader
+            leadCandidates.sort((a, b) => a.distToCenter() - b.distToCenter());
+            const winner = leadCandidates[0];
+            activePriorityWinnerId = winner.id;
+            winner.action = "go";
+            for (let i = 1; i < leadCandidates.length; i++) {
+                leadCandidates[i].action = "yield";
+            }
+        } else if (simMode === "auction") {
+            // Highest urgency bid (emergency vehicle priority)
+            leadCandidates.sort((a, b) => {
+                if (a.isEmergency !== b.isEmergency) return b.isEmergency ? 1 : -1;
+                return b.urgency - a.urgency;
+            });
+            const winner = leadCandidates[0];
+            activePriorityWinnerId = winner.id;
+            winner.action = "go";
+            for (let i = 1; i < leadCandidates.length; i++) {
+                leadCandidates[i].action = "yield";
+            }
+        } else if (simMode === "voting") {
+            // Borda count ranking (urgency + waiting time bonus + emergency)
+            leadCandidates.sort((a, b) => {
+                const scoreA = (a.isEmergency ? 60 : 0) + a.urgency + a.waitingTime * 1.8;
+                const scoreB = (b.isEmergency ? 60 : 0) + b.urgency + b.waitingTime * 1.8;
+                return scoreB - scoreA;
+            });
+            const winner = leadCandidates[0];
+            activePriorityWinnerId = winner.id;
+            winner.action = "go";
+            for (let i = 1; i < leadCandidates.length; i++) {
+                leadCandidates[i].action = "yield";
+            }
+        } else if (simMode === "bayesian") {
+            // Incomplete information: AV yields conservatively to human driver
+            const av = leadCandidates.find(v => v.isAv);
+            const hdv = leadCandidates.find(v => !v.isAv);
+            if (av && hdv) {
+                av.action = "yield";
+                hdv.action = "go";
+                activePriorityWinnerId = hdv.id;
+            } else {
+                leadCandidates.sort((a, b) => a.distToCenter() - b.distToCenter());
+                leadCandidates[0].action = "go";
+                for (let i = 1; i < leadCandidates.length; i++) leadCandidates[i].action = "yield";
+                activePriorityWinnerId = leadCandidates[0].id;
+            }
+        } else if (simMode === "nash") {
+            // Mixed strategy simultaneous coordination
+            leadCandidates.sort((a, b) => a.distToCenter() - b.distToCenter());
+            if (Math.random() < 0.08) {
+                // Hawk-Hawk simultaneous entry collision risk
+                leadCandidates[0].action = "go";
+                leadCandidates[1].action = "go";
+            } else {
+                leadCandidates[0].action = "go";
+                leadCandidates[1].action = "yield";
+                activePriorityWinnerId = leadCandidates[0].id;
+            }
         }
     }
+
+    // 4. Car-Following: Ensure trailing cars follow lead cars smoothly and fill up spaces
+    enforceSameLaneCarFollowing(active);
 }
 
 function checkSimConflicts() {
@@ -630,20 +1020,25 @@ function checkSimConflicts() {
 }
 
 function updateMetricsUI() {
-    document.getElementById("metric-throughput").textContent = simThroughput.toString();
-    document.getElementById("metric-collisions").textContent = simCollisions.toString();
+    const elTh = document.getElementById("metric-throughput");
+    const elCol = document.getElementById("metric-collisions");
+    const elDel = document.getElementById("metric-avg-delay");
+    const elFair = document.getElementById("metric-fairness");
+
+    if (elTh) elTh.textContent = simThroughput.toString();
+    if (elCol) elCol.textContent = simCollisions.toString();
 
     const avgWait = simDelays.length > 0
         ? (simDelays.reduce((a, b) => a + b, 0) / simDelays.length).toFixed(1)
         : "0.0";
-    document.getElementById("metric-avg-delay").textContent = `${avgWait}s`;
+    if (elDel) elDel.textContent = `${avgWait}s`;
 
-    // Jain's index
+    // Jain's fairness index
     if (simDelays.length >= 2) {
         const sum = simDelays.reduce((a, b) => a + b, 0);
         const sumSq = simDelays.reduce((a, b) => a + b * b, 0);
         const jain = ((sum * sum) / (simDelays.length * sumSq)).toFixed(3);
-        document.getElementById("metric-fairness").textContent = isNaN(jain) ? "1.000" : jain;
+        if (elFair) elFair.textContent = isNaN(jain) ? "1.000" : jain;
     }
 }
 
@@ -744,6 +1139,18 @@ function drawSim(ctx) {
 
 function simLoop() {
     if (simRunning) {
+        // Handle Auto-Flow Spawning
+        if (autoFlowEnabled) {
+            autoFlowTimer += 0.016;
+            if (autoFlowTimer >= 3.2) {
+                autoFlowTimer = 0;
+                const activeCount = simVehicles.filter(v => v.state !== "passed" && v.state !== "collided").length;
+                if (activeCount < 10) {
+                    spawnWave();
+                }
+            }
+        }
+
         coordinateVehicles();
         simVehicles.forEach(v => {
             v.update();
@@ -755,9 +1162,9 @@ function simLoop() {
             }
         });
         checkSimConflicts();
-        // Remove exited or old vehicles
+        // Remove exited or old vehicles (beyond canvas bounds)
         simVehicles = simVehicles.filter(v => {
-            return Math.hypot(v.x - v.centerX, v.y - v.centerY) < 400 || v.state === "collided";
+            return Math.hypot(v.x - v.centerX, v.y - v.centerY) < 410 || v.state === "collided";
         });
     }
 

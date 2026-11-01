@@ -467,6 +467,84 @@ body {
     margin-top: 6px;
 }
 
+/* Dynamic Matrix Cell Highlights */
+.matrix-cell {
+    position: relative;
+    transition: all 0.25s ease;
+}
+
+.matrix-cell.is-nash {
+    background: rgba(46, 204, 113, 0.15) !important;
+    border: 2px solid #2ecc71 !important;
+    box-shadow: inset 0 0 16px rgba(46, 204, 113, 0.2);
+}
+
+.matrix-cell.is-pareto:not(.is-nash) {
+    background: rgba(0, 212, 255, 0.05);
+}
+
+.cell-nash-badge {
+    display: inline-block;
+    margin-top: 5px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    background: rgba(46, 204, 113, 0.25);
+    color: #2ecc71;
+    border: 1px solid rgba(46, 204, 113, 0.6);
+    text-transform: uppercase;
+}
+
+.cell-nash-badge.pareto {
+    background: linear-gradient(135deg, rgba(46, 204, 113, 0.35), rgba(0, 212, 255, 0.35));
+    color: #a8ffb2;
+    border-color: #2ecc71;
+}
+
+.input-payoff.best-response-a {
+    border: 2px solid #00d4ff !important;
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.6);
+    font-weight: 700;
+    color: #00d4ff !important;
+}
+
+.input-payoff.best-response-b {
+    border: 2px solid #f39c12 !important;
+    box-shadow: 0 0 10px rgba(243, 156, 18, 0.6);
+    font-weight: 700;
+    color: #f39c12 !important;
+}
+
+.solver-status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.solver-status-pill {
+    color: var(--accent-green);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn.active-pulse {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.3), rgba(46, 204, 113, 0.3));
+    border-color: var(--accent-green);
+    color: #2ecc71;
+    box-shadow: 0 0 12px rgba(46, 204, 113, 0.4);
+}
+
 /* Solver Results Output */
 .eq-card {
     background: rgba(0, 0, 0, 0.3);
@@ -568,13 +646,22 @@ body {
 }
 
 .math-block {
-    background: rgba(0, 0, 0, 0.4);
-    padding: 10px 14px;
+    background: rgba(0, 0, 0, 0.45);
+    padding: 14px 18px;
     border-radius: var(--radius-sm);
-    font-family: var(--font-mono);
-    color: #ffcc00;
-    font-size: 0.85rem;
-    border-left: 3px solid #ffcc00;
+    color: #f0f6fc;
+    font-size: 0.95rem;
+    border-left: 3px solid var(--accent-cyan);
+    margin: 12px 0;
+    overflow-x: auto;
+}
+
+.math-block .katex-display {
+    margin: 6px 0;
+}
+
+.math-block .katex {
+    color: #e6edf3;
 }
 
 /* Footer */
